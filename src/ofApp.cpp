@@ -2,52 +2,6 @@
 
 
 
-
-
-
-
-static bool process_sf(SNDFILE *infile, Fvad *vad, size_t framelen, SNDFILE *outfiles[2], FILE *listfile)
-{
-    double *buf0 = NULL;
-    int16_t *buf1 = NULL;
-    int vadres, prev = -1;
-    long frames[2] = {0, 0};
-    long segments[2] = {0, 0};
-
-
-    while (sf_read_double(infile, buf0, framelen) == (sf_count_t)framelen) {
-
-        // Convert the read samples to int16
-        for (size_t i = 0; i < framelen; i++)
-            buf1[i] = buf0[i] * INT16_MAX;
-
-        vadres = fvad_process(vad, buf1, framelen);
-        if (vadres < 0) {
-            fprintf(stderr, "VAD processing failed\n");
-        }
-
-        vadres = !!vadres; // make sure it is 0 or 1
-
-        frames[vadres]++;
-        if (prev != vadres) segments[vadres]++;
-        prev = vadres;
-    }
-
-    printf("voice detected in %ld of %ld frames (%.2f%%)\n",
-        frames[1], frames[0] + frames[1],
-        frames[0] + frames[1] ?
-            100.0 * ((double)frames[1] / (frames[0] + frames[1])) : 0.0);
-    printf("%ld voice segments, average length %.2f frames\n",
-        segments[1], segments[1] ? (double)frames[1] / segments[1] : 0.0);
-    printf("%ld non-voice segments, average length %.2f frames\n",
-        segments[0], segments[0] ? (double)frames[0] / segments[0] : 0.0);
-
-}
-
-
-
-
-
 void ofApp::setup(){
 
     sender.setup(HOST, PORT);
@@ -62,8 +16,8 @@ void ofApp::setup(){
   	ofSoundStreamSettings settings;
 
 
-    auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
-  	//auto devices = soundStream.getMatchingDevices("default");
+    //auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
+  	auto devices = soundStream.getMatchingDevices("default");
     settings.setInDevice(devices[0]);
   	settings.setInListener(this);
   	settings.sampleRate = SAMPLE_RATE;
@@ -76,9 +30,8 @@ void ofApp::setup(){
     oct.setup(SAMPLE_RATE, FFT_SIZE/2, N_AVERAGES);
 
     mfccs = (double*) malloc(sizeof(double) * N_COEFF);
-    noise_mfccs = (double*) malloc(sizeof(double) * N_COEFF * N_NOISE);
-    noise_avg_mfccs = (double*) malloc(sizeof(double) * N_COEFF);
-
+    avg_mfccs = (double*) malloc(sizeof(double) * N_COEFF);
+    prev_mfccs = (double*) malloc(sizeof(double) * N_COEFF * N_AVG_SAMPLES);
 
     //512 bins, 42 filters, 13 coeffs, min/max freq 20/20000
     mfcc.setup(BUFFER_SIZE, 42, N_COEFF, 100, 4000, SAMPLE_RATE);
@@ -88,32 +41,19 @@ void ofApp::setup(){
     fbo_spectrogram.allocate(BUFFER_SIZE/2, BUFFER_SIZE/2);
 
 
+    vad_history = (uint8_t*) malloc(sizeof(uint8_t) * BUFFER_SIZE/2 );
+    
+
+    vad.setup(SAMPLE_RATE);
+
+
     gui.setup(); // most of the time you don't need a name
-	gui.add(filled.setup("fill", true));
-	gui.add(radius.setup("radius", 140, 10, 300));
-	gui.add(center.setup("center", ofVec2f(ofGetWidth()*.5, ofGetHeight()*.5), ofVec2f(0, 0), ofVec2f(ofGetWidth(), ofGetHeight())));
-	gui.add(color.setup("color", ofColor(100, 100, 140), ofColor(0, 0), ofColor(255, 255)));
-	gui.add(circleResolution.setup("circle res", 5, 3, 90));
-	gui.add(twoCircles.setup("two circles"));
-	gui.add(ringButton.setup("ring"));
-	gui.add(screenSize.setup("screen size", ofToString(ofGetWidth())+"x"+ofToString(ofGetHeight())));
+	gui.add(inputVolume.setup("inputVolume", 1.0f, 0.0f, 1.0f));
+	gui.add(vadMode.setup("vadMode", 0, 0, 3));
+    gui.setPosition(ofGetWidth() - gui.getWidth(),ofGetHeight()/2);
 
 	bHide = false;
 
-
-    vad = fvad_new();
-    if (!vad) {
-        fprintf(stderr, "out of memory\n");
-    }
-    if (fvad_set_sample_rate(vad, SAMPLE_RATE) < 0) {
-        fprintf(stderr, "invalid sample rate: %d Hz\n", SAMPLE_RATE);
-        goto fail;
-    }
-
-
- if (!process_sf(in_sf, vad,
-            (size_t)in_info.samplerate / 1000 * frame_ms, out_sf, list_file))
-        goto fail;
 
 
 }
@@ -154,7 +94,7 @@ void ofApp::drawMFCC(int _x, int _y, int _w, int _h){
     }
 
     for(int i=0; i < N_COEFF; i++) {
-        float height = (mfccs[i]-noise_avg_mfccs[i]) * _h;
+        float height = (avg_mfccs[i]) * _h;
         ofDrawRectangle(_x + _w/2 + i*xinc,_y+_h/2 - height,xinc, height);
     }
 
@@ -191,6 +131,20 @@ void ofApp::drawFeatures(int _x, int _y, int _w, int _h){
 
     ofNoFill();
     ofDrawRectangle(_x,_y,_w,_h);
+
+
+
+
+    ofDrawBitmapString("i: " + ofToString(spectrogram_pos), ofGetWidth()-150, 20);
+    ofDrawBitmapString("fr[0]: " + ofToString(vad.frames[0]), ofGetWidth()-150, 40);
+    ofDrawBitmapString("fr[1]: " + ofToString(vad.frames[1]), ofGetWidth()-150, 60);
+    ofDrawBitmapString("fr[1]: " + ofToString(vad.frames[0] + vad.frames[1] ?
+            100.0 * ((double)vad.frames[1] / (vad.frames[0] + vad.frames[1])) : 0.0), ofGetWidth()-150, 80);
+    ofDrawBitmapString("voiced: " + ofToString(vad.segments[1] ?
+             (double)vad.frames[1] / vad.segments[1] : 0.0), ofGetWidth()-150, 100);
+    ofDrawBitmapString("non v.: " + ofToString(vad.segments[0] ?
+             (double)vad.frames[0] / vad.segments[0] : 0.0), ofGetWidth()-150, 120);
+
 }
 
 
@@ -210,14 +164,13 @@ void ofApp::draw(){
     drawMFCC(0,0,ofGetWidth()/2, ofGetHeight()/2);
     drawSpectrum(ofGetWidth()/2,0,ofGetWidth()/2, ofGetHeight()/2);
 
+	ofSetWindowTitle(ofToString("void (fps: ") + ofToString(ofGetFrameRate(),0)+ ofToString(")"));
 
-
-    ofDrawBitmapString(ofGetFrameRate(), ofGetWidth()-100, 20);
 
 	// auto draw?
 	// should the gui control hiding?
 	if(!bHide){
-		//gui.draw();
+		gui.draw();
 	}
 
     //Send OSC:
@@ -227,6 +180,19 @@ void ofApp::draw(){
         m.addFloatArg(mfccs[i]);
     }
     sender.sendMessage(m);
+
+    if(lastInputVolume!=inputVolume){
+        lastInputVolume=inputVolume;
+        inputVolumeGainFactor = inputVolume * inputVolume * inputVolume * inputVolume;
+    }
+
+    if(lastVadMode!=vadMode){
+        lastVadMode=vadMode;
+        vad.setMode(vadMode);
+    }
+        
+
+    // https://www.dr-lex.be/info-stuff/volumecontrols.html#table1
 }
 
 
@@ -234,13 +200,42 @@ void ofApp::draw(){
 void ofApp::audioIn(ofSoundBuffer & buffer){
 	for (size_t i = 0; i < buffer.getNumFrames(); i++){
         wave = buffer[i*2]*0.5 + buffer[i*2+1]*0.5;
+        wave *= inputVolumeGainFactor;
+
+        //Calculate vad and see if buffer is full
+        if (vad.process(wave)) {
+        }
+
+
         //Calculate the mfccs if fft buffer is full
         if (mfft.process(wave)) {
             mfft.magsToDB();
             oct.calculate(mfft.magnitudesDB);
             mfcc.mfcc(mfft.magnitudes, mfccs);
             should_update_fbos = 1;
+
+
+            
+            //copy current mfccs to prevs
+            for( int i = 0; i < N_COEFF; i++ ){
+                //cache
+                prev_mfccs[prev_mfccs_idx*N_COEFF+i] = mfccs[i];
+
+                double total = 0;    
+                for( int j = 0; j < N_AVG_SAMPLES; j++ )
+                    total += prev_mfccs[j*N_COEFF+i];
+                avg_mfccs[i] = total / N_AVG_SAMPLES;
+            }
+
+            prev_mfccs_idx++;
+            prev_mfccs_idx %= N_AVG_SAMPLES;
+
+
+
+
         }
+
+
 	}
 }
 
@@ -266,42 +261,25 @@ void ofApp::updateFbo(){
     }
     fbo_spectrum.end();
 
-
     fbo_spectrogram.begin();
     glBegin(GL_POINTS);
     for( int i = 0; i < s; i++ ){
         float p = ofMap(mfft.magnitudes[i], 0.0, 10.0, 0, 255);
         if( p > 255 )p = 255;
         if( p < 0 ) p = 0;
-        ofSetColor(p);
+        if(vad.vad_result && i < 20)
+            ofSetColor(p,127,127);
+        else
+            ofSetColor(p);
         glVertex2f(spectrogram_pos,s-i);
     }
     glEnd();
     fbo_spectrogram.end();
 
+
     spectrogram_pos++;
     spectrogram_pos %=s;
 
-/*
-    if(noise_mfccs_index<N_NOISE){
-        for( int i = 0; i < N_COEFF; i++ ){
-            noise_mfccs[noise_mfccs_index*N_COEFF+i] = mfccs[i];
-        }
-        
-        if(noise_mfccs_index==(N_NOISE-1)){
-            for( int i = 0; i < N_COEFF; i++ ){
-                double total = 0;    
-                for( int j = 0; j < N_NOISE; j++ )
-                    total += noise_mfccs[j*N_COEFF+i];
-                
-                noise_avg_mfccs[i] = total / N_NOISE;
-            }
-        }
-        
-        noise_mfccs_index++;
-    }
-
-*/
 
 
 }

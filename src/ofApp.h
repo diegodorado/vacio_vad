@@ -4,8 +4,7 @@
 #include "ofxMaxim.h"
 #include "ofxOsc.h"
 #include "ofxGui.h"
-
-#include <fvad.h>
+#include "vad.h"
 
 #define HOST "localhost"
 #define PORT 6448
@@ -15,7 +14,7 @@
 #define BUFFER_SIZE 1024
 #define N_AVERAGES 12
 #define N_COEFF 13
-#define N_NOISE 10
+#define N_AVG_SAMPLES 20
 
 class ofApp : public ofBaseApp{
 
@@ -36,12 +35,14 @@ class ofApp : public ofBaseApp{
     ofxMaxiFFTOctaveAnalyzer oct;
     ofxMaxiMFCC mfcc;
     double *mfccs;
-    double *noise_mfccs;
-    int noise_mfccs_index = 0;
-    double *noise_avg_mfccs;
-    Fvad *vad = NULL;
+    double *prev_mfccs;
+    double *avg_mfccs;
+    int prev_mfccs_idx = 0;
+
+    uint8_t *vad_history;
 
     ofxOscSender sender;
+    Vad vad;
 
 		ofSoundStream soundStream;
     
@@ -55,14 +56,11 @@ class ofApp : public ofBaseApp{
 
     //GUI STUFF
     bool bHide;
-    ofxFloatSlider radius;
-    ofxColorSlider color;
-    ofxVec2Slider center;
-    ofxIntSlider circleResolution;
-    ofxToggle filled;
-    ofxButton twoCircles;
-    ofxButton ringButton;
-    ofxLabel screenSize;
+    ofxFloatSlider inputVolume;
+    float lastInputVolume = 1.0f;
+    float inputVolumeGainFactor = 1.0f;
+    ofxIntSlider vadMode;
+    int lastVadMode = 0;
     ofxPanel gui;
 
 

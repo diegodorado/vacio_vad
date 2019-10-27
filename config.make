@@ -37,7 +37,8 @@
 #
 #   Note: Leave a leading space when adding list items with the += operator
 ################################################################################
-# PROJECT_EXTERNAL_SOURCE_PATHS = /usr/local/lib/libfvad
+# 
+PROJECT_EXTERNAL_SOURCE_PATHS = /usr/local/lib/libfvad
 
 ################################################################################
 # PROJECT EXCLUSIONS
@@ -76,8 +77,8 @@
 # add a runtime path to search for those shared libraries, since they aren't 
 # incorporated directly into the final executable application binary.
 ################################################################################
-# 
-PROJECT_LDFLAGS=-Wl,-rpath=./libs -lfvad
+# PROJECT_LDFLAGS=-Wl,-rpath=./libs -lfvad
+PROJECT_LDFLAGS=-lfvad
 
 ################################################################################
 # PROJECT DEFINES

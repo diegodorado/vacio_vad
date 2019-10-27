@@ -12,22 +12,22 @@
                 "panel": "shared"
             },
             "command": "make -j -s 2>&1 && make RunRelease",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
+            "group": "build",
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}"
+                ],
                 "pattern": {
-                  "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                  "file": 1,
-                  "line": 2,
-                  "column": 3,
-                  "severity": 4,
-                  "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
-              }
+            }
         },
         {
             "type": "shell",
@@ -43,16 +43,19 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}"
+                ],
                 "pattern": {
-                  "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                  "file": 1,
-                  "line": 2,
-                  "column": 3,
-                  "severity": 4,
-                  "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
-              }
+            }
         },
         {
             "type": "shell",
@@ -68,16 +71,19 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}"
+                ],
                 "pattern": {
-                  "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                  "file": 1,
-                  "line": 2,
-                  "column": 3,
-                  "severity": 4,
-                  "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
-              }
+            }
         },
         {
             "type": "shell",
@@ -93,16 +99,19 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}"
+                ],
                 "pattern": {
-                  "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                  "file": 1,
-                  "line": 2,
-                  "column": 3,
-                  "severity": 4,
-                  "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
-              }
+            }
         },
         {
             "type": "shell",
@@ -118,16 +127,19 @@
             },
             "problemMatcher": {
                 "owner": "cpp",
-                "fileLocation": ["relative", "${workspaceFolder}"],
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}"
+                ],
                 "pattern": {
-                  "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                  "file": 1,
-                  "line": 2,
-                  "column": 3,
-                  "severity": 4,
-                  "message": 5
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
                 }
-              }
-         }
+            }
+        }
     ]
 }

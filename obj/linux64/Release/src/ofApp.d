@@ -556,7 +556,8 @@ obj/linux64/Release/src/ofApp.o: \
  /home/diegodorado/Code/of/addons/ofxGui/src/ofxButton.h \
  /home/diegodorado/Code/of/addons/ofxGui/src/ofxLabel.h \
  /home/diegodorado/Code/of/addons/ofxGui/src/ofxColorPicker.h \
- /home/diegodorado/Code/of/addons/ofxGui/src/ofxPanel.h
+ /home/diegodorado/Code/of/addons/ofxGui/src/ofxPanel.h \
+ /home/diegodorado/Code/of/apps/myApps/mfcc/src/vad.h
 
 /home/diegodorado/Code/of/apps/myApps/mfcc/src/ofApp.h:
 
@@ -1703,3 +1704,5 @@ obj/linux64/Release/src/ofApp.o: \
 /home/diegodorado/Code/of/addons/ofxGui/src/ofxColorPicker.h:
 
 /home/diegodorado/Code/of/addons/ofxGui/src/ofxPanel.h:
+
+/home/diegodorado/Code/of/apps/myApps/mfcc/src/vad.h:
