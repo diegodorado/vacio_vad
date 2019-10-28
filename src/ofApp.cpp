@@ -1,4 +1,5 @@
 #include "ofApp.h"
+#include <stdio.h>
 
 
 
@@ -16,6 +17,7 @@ void ofApp::setup(){
   	ofSoundStreamSettings settings;
 
 
+    fprintf(stdout, "opening sound device\n");
     //auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
   	auto devices = soundStream.getMatchingDevices("default");
     settings.setInDevice(devices[0]);
@@ -25,6 +27,7 @@ void ofApp::setup(){
   	settings.numInputChannels = 2;
   	settings.bufferSize = BUFFER_SIZE;
   	soundStream.setup(settings);
+    fprintf(stdout, "setup sound device\n");
 
     mfft.setup(FFT_SIZE, BUFFER_SIZE, BUFFER_SIZE);
     oct.setup(SAMPLE_RATE, FFT_SIZE/2, N_AVERAGES);
