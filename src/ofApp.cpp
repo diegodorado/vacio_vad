@@ -1,10 +1,6 @@
 #include "ofApp.h"
-#include <stdio.h>
-
-
 
 void ofApp::setup(){
-
     sender.setup(HOST, PORT);
 
     /* some standard setup stuff*/
@@ -14,12 +10,14 @@ void ofApp::setup(){
     ofSetFrameRate(60);
     ofSetVerticalSync(true);
 
+
   	ofSoundStreamSettings settings;
 
-
-    fprintf(stdout, "opening sound device\n");
     //auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
-  	auto devices = soundStream.getMatchingDevices("default");
+    // auto devices = soundStream.getDeviceList(ofSoundDevice::Api::MS_WASAPI);
+    //auto devices = soundStream.getDeviceList();
+  	//auto devices = soundStream.getMatchingDevices("default");
+    auto devices = soundStream.getMatchingDevices("",2);
     settings.setInDevice(devices[0]);
   	settings.setInListener(this);
   	settings.sampleRate = SAMPLE_RATE;
@@ -27,7 +25,7 @@ void ofApp::setup(){
   	settings.numInputChannels = 2;
   	settings.bufferSize = BUFFER_SIZE;
   	soundStream.setup(settings);
-    fprintf(stdout, "setup sound device\n");
+ 
 
     mfft.setup(FFT_SIZE, BUFFER_SIZE, BUFFER_SIZE);
     oct.setup(SAMPLE_RATE, FFT_SIZE/2, N_AVERAGES);
@@ -75,6 +73,7 @@ void ofApp::setup(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
+
     if( should_update_fbos ){
         updateFbo();
         should_update_fbos = 0; 
@@ -216,6 +215,7 @@ void ofApp::draw(){
 
 
 void ofApp::audioIn(ofSoundBuffer & buffer){
+
 	for (size_t i = 0; i < buffer.getNumFrames(); i++){
         wave = buffer[i*2]*0.5 + buffer[i*2+1]*0.5;
         wave *= inputVolumeGainFactor;
