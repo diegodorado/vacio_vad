@@ -1,6 +1,6 @@
 #pragma once
 
-#include <fvad.h>
+#include "libvad/fvad.h"
 
 class Vad{
 
@@ -17,6 +17,7 @@ class Vad{
         uint16_t buffer_idx = 0;
         int vad_result = -1;
         int vad_prev_result= -1;
+        bool changed = false;
         Fvad *vad = NULL;
 
 };

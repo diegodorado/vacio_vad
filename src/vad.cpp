@@ -40,6 +40,10 @@ bool Vad::process(float sample){
     buffer[buffer_idx++] = sample * INT16_MAX;
 
     if(buffer_idx >= frame_length){
+        //remember previous result
+        if (changed)
+            vad_prev_result = vad_result;
+
         //resets buffer
         buffer_idx = 0;
 
@@ -51,10 +55,9 @@ bool Vad::process(float sample){
         // make sure it is 0 or 1
         vad_result = !!vad_result; 
         frames[vad_result]++;
-        if (vad_prev_result != vad_result){
+        changed = vad_prev_result != vad_result;
+        if (changed)
             segments[vad_result]++;
-            vad_prev_result = vad_result;
-        }
 
         return true;
     }else{
