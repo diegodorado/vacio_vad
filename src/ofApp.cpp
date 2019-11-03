@@ -19,7 +19,8 @@ void ofApp::setup(){
 
     fprintf(stdout, "opening sound device\n");
     //auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
-  	auto devices = soundStream.getMatchingDevices("default");
+  	//auto devices = soundStream.getMatchingDevices("default");
+    auto devices = soundStream.getMatchingDevices("",2);
     settings.setInDevice(devices[0]);
   	settings.setInListener(this);
   	settings.sampleRate = SAMPLE_RATE;
@@ -37,7 +38,8 @@ void ofApp::setup(){
     prev_mfccs = (double*) malloc(sizeof(double) * N_COEFF * N_AVG_SAMPLES);
 
     //512 bins, 42 filters, 13 coeffs, min/max freq 20/20000
-    mfcc.setup(BUFFER_SIZE, 42, N_COEFF, 100, 4000, SAMPLE_RATE);
+    //mfcc.setup(BUFFER_SIZE, 42, N_COEFF, 100, 4000, SAMPLE_RATE);
+    mfcc.setup(BUFFER_SIZE/2, 42, N_COEFF, 20, 20000, SAMPLE_RATE);
     ofxMaxiSettings::setup(SAMPLE_RATE, 2, BUFFER_SIZE);
 
     fbo_spectrum.allocate(BUFFER_SIZE/2, BUFFER_SIZE/2);
@@ -56,16 +58,23 @@ void ofApp::setup(){
 	gui.add(vadMode.setup("vadMode", 0, 0, 3));
 
 
-	gui.add(vadAttack.setup("vadAttack", 0.1f, 0.1f, 2.0f));
-	gui.add(vadRelease.setup("vadRelease", 0.1f, 0.1f, 2.0f));
+	gui.add(vadAttack.setup("vadAttack", 2.0f, 0.1f, 5.0f));
+	gui.add(vadRelease.setup("vadRelease", 2.0f, 0.1f, 5.0f));
 	gui.add(minSpeechTime.setup("minSpeechTime", 1.0f, 0.1f, 5.0f));
+	gui.add(minSilenceTime.setup("minSilenceTime", 1.0f, 0.1f, 5.0f));
 	gui.add(speechHoldTime.setup("speechHoldTime", 5.0f, 1.0f, 20.0f));
+	gui.add(silenceHoldTime.setup("silenceHoldTime", 5.0f, 1.0f, 20.0f));
 	gui.add(maxSpeechTime.setup("maxSpeechTime", 60.0f, 30.0f, 240.0f));
-	gui.add(silenceTime.setup("silenceTime", 5.0f, 5.0f, 30.0f));
+	gui.add(silenceTime.setup("silenceTime", 20.0f, 5.0f, 60.0f));
 	gui.add(vanishingTime.setup("vanishingTime", 20.0f, 10.0f, 60.0f));
 
+    gui.add(labels[0].setup("speechRatio",""));
+    gui.add(labels[1].setup("listeningAt",""));
+    gui.add(labels[2].setup("timeSilenced",""));
+    gui.add(labels[3].setup("timeSpeaking",""));
+    gui.add(labels[4].setup("status",""));
 
-    gui.setPosition(ofGetWidth() - gui.getWidth(),ofGetHeight()/2);
+    gui.setPosition(ofGetWidth() - gui.getWidth(),0);
 
 	bHide = false;
 
@@ -79,9 +88,6 @@ void ofApp::update(){
         updateFbo();
         should_update_fbos = 0; 
     }
-
-    vadLevel = ofClamp(vadLevel + ofGetLastFrameTime() * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
-
 }
 
 
@@ -102,17 +108,12 @@ void ofApp::drawSpectrogram(int _x, int _y, int _w, int _h){
 void ofApp::drawMFCC(int _x, int _y, int _w, int _h){
     ofFill();
     ofSetColor(255);
-    float xinc = _w / N_COEFF / 2;
+
+    float xinc = _w / N_COEFF;
     for(int i=0; i < N_COEFF; i++) {
         float height = mfccs[i] * _h;
         ofDrawRectangle(_x + i*xinc,_y+_h/2 - height,xinc, height);
     }
-
-    for(int i=0; i < N_COEFF; i++) {
-        float height = (avg_mfccs[i]) * _h;
-        ofDrawRectangle(_x + _w/2 + i*xinc,_y+_h/2 - height,xinc, height);
-    }
-
 }
 
 
@@ -143,24 +144,6 @@ void ofApp::drawFeatures(int _x, int _y, int _w, int _h){
     ofDrawRectangle(_x,_y,_w,_h);
 
 
-
-
-    ofDrawBitmapString("fr[0]: " + ofToString(vad.frames[0]), ofGetWidth()-150, 40);
-    ofDrawBitmapString("fr[1]: " + ofToString(vad.frames[1]), ofGetWidth()-150, 60);
-    ofDrawBitmapString("fr[1]: " + ofToString(vad.frames[0] + vad.frames[1] ?
-            100.0 * ((double)vad.frames[1] / (vad.frames[0] + vad.frames[1])) : 0.0), ofGetWidth()-150, 80);
-    ofDrawBitmapString("voiced: " + ofToString(vad.segments[1] ?
-             (double)vad.frames[1] / vad.segments[1] : 0.0), ofGetWidth()-150, 100);
-    ofDrawBitmapString("non v.: " + ofToString(vad.segments[0] ?
-             (double)vad.frames[0] / vad.segments[0] : 0.0), ofGetWidth()-150, 120);
-    ofDrawBitmapString("et.: " + ofToString(ofGetElapsedTimef(),1), ofGetWidth()-150, 140);
-    ofDrawBitmapString("vadc.: " + ofToString(vadChangedAt,1), ofGetWidth()-150, 160);
-    ofDrawBitmapString("speech: " + ofToString(speechAt,1), ofGetWidth()-150, 170);
-    ofDrawBitmapString("status: " + ofToString(status), ofGetWidth()-150, 180);
-
-
-
-
 }
 
 
@@ -189,15 +172,23 @@ void ofApp::draw(){
 	// should the gui control hiding?
 	if(!bHide){
 		gui.draw();
+        float et = ofGetElapsedTimef();
+        labels[0] = ofToString(speechRatio,2);
+        labels[1] = ofToString(ofGetElapsedTimef()-listeningAt,1);
+        labels[2] = ofToString(timeSilenced,1);
+        labels[3] = ofToString(timeSpeaking,1);
+        labels[4] = ofToString(statusToString());
 	}
 
     //Send OSC:
-    ofxOscMessage m;
-    m.setAddress("/wek/inputs");
     for (int i = 0; i < N_COEFF; i++) {
-        m.addFloatArg(mfccs[i]);
+        sendFloat((ofToString("/mfcc")+ofToString(i)).c_str(),ofClamp((float)(mfccs[i]+1.0)*0.5f, 0.0f, 1.0f));
     }
-    sender.sendMessage(m);
+
+    sendFloat("/vad",vadLevel);
+    sendFloat("/verbo", speechRatio);
+
+
 
     if(lastInputVolume!=inputVolume){
         lastInputVolume=inputVolume;
@@ -209,10 +200,47 @@ void ofApp::draw(){
         lastVadMode=vadMode;
         vad.setMode(vadMode);
     }
-        
+
 
 }
 
+
+void ofApp::calculateVad(){
+
+}
+
+
+void ofApp::sendFloat(const char* addr, float val){
+    //Send OSC:
+    ofxOscMessage m;
+    m.setAddress(addr);
+    m.addFloatArg(val);
+    sender.sendMessage(m);
+
+}
+
+char* ofApp::statusToString(){
+    switch (status)
+    {
+        case IDLE:
+            return "IDLE";
+
+        case TRANSITIONING:
+            return "TRANSITIONING";
+
+        case SPEAKING:
+            return "SPEAKING";
+
+        case NOT_SPEAKING:
+            return "NOT_SPEAKING";
+
+        case VANISHING:
+            return "VANISHING";
+        
+        default:
+            return "IMPOSIBLE";
+    }
+}
 
 
 void ofApp::audioIn(ofSoundBuffer & buffer){
@@ -220,31 +248,93 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
         wave = buffer[i*2]*0.5 + buffer[i*2+1]*0.5;
         wave *= inputVolumeGainFactor;
 
+
+        //Calculate the mfccs if fft buffer is full
+        if (mfft.process(wave)) {
+            mfft.magsToDB();
+            oct.calculate(mfft.magnitudesDB);
+            mfcc.mfcc(mfft.magnitudes, mfccs);
+            should_update_fbos = 1;
+        }
+
         //Calculate vad and see if buffer is full
         if (vad.process(wave)) {
 
-            float et = ofGetElapsedTimef();
 
-            if(vad.changed){
+
+            float et = ofGetElapsedTimef();
+            float dt = et-lastElapsedTimef;
+            lastElapsedTimef = et;
+            
+
+            if(vad.changed)
                 vadChangedAt = et;
-            }
+
+            speechRatio = (timeSilenced + timeSpeaking)==0 ? 0.0f : timeSpeaking/(timeSilenced + timeSpeaking);
+
+
 
             switch (status)
             {
                 case IDLE:
-                    if(vad.vad_result==1 && (et-vadChangedAt) > minSpeechTime ){
-                        status = LISTENING;
-                        speechAt = et;
+                    listeningAt = et;
+                    timeSilenced = 0.0f;
+                    timeSpeaking = 0.0f;
+                    if((vad.vad_result==1) && (et-vadChangedAt) > minSpeechTime ){
+                        setStatus(TRANSITIONING);
                     }
+
                     break;
-                
-                case LISTENING:
-                    if(vad.vad_result==0 && (et-vadChangedAt) > speechHoldTime ){
-                        status = IDLE;
+
+                case TRANSITIONING:
+                    vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+
+                    if(vadLevel == 1.0f ){
+                        setStatus(SPEAKING);
                     }
+
+                    if(vadLevel == 0.0f ){
+                        setStatus(NOT_SPEAKING);
+                    }
+
+
                     break;
-                
+
+                case SPEAKING:
+                    timeSpeaking += dt;
+
+                    // update if not holding
+                    if((et-changedStateAt) > speechHoldTime )
+                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+
+                    if((et-listeningAt) > maxSpeechTime)
+                        setStatus(VANISHING);
+                    
+                    if(vadLevel < 1.0f)
+                        setStatus(TRANSITIONING);
+                    
+                    break;
+
+                case NOT_SPEAKING:
+                    timeSilenced += dt;
+
+                    if((et-changedStateAt) > silenceHoldTime )
+                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+
+                    if((et-changedStateAt) > silenceTime)
+                        setStatus(VANISHING);
+                   
+
+                    if( vadLevel > 0.0f )
+                        setStatus(TRANSITIONING);
+                    
+
+                    break;
+
                 case VANISHING:
+                    if( (et-changedStateAt) > vanishingTime ){
+                        setStatus(IDLE);
+                    }
                     break;
                 
                 default:
@@ -255,39 +345,21 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
         }
 
 
-        //Calculate the mfccs if fft buffer is full
-        if (mfft.process(wave)) {
-            mfft.magsToDB();
-            oct.calculate(mfft.magnitudesDB);
-            mfcc.mfcc(mfft.magnitudes, mfccs);
-            should_update_fbos = 1;
-
-
-            
-            //copy current mfccs to prevs
-            for( int i = 0; i < N_COEFF; i++ ){
-                //cache
-                prev_mfccs[prev_mfccs_idx*N_COEFF+i] = mfccs[i];
-
-                double total = 0;    
-                for( int j = 0; j < N_AVG_SAMPLES; j++ )
-                    total += prev_mfccs[j*N_COEFF+i];
-                avg_mfccs[i] = total / N_AVG_SAMPLES;
-            }
-
-            prev_mfccs_idx++;
-            prev_mfccs_idx %= N_AVG_SAMPLES;
-
-
-
-
-        }
 
 
 	}
 }
 
+    
 
+void ofApp::setStatus(Status_t st){
+    status = st;
+    changedStateAt = ofGetElapsedTimef();
+
+    sendFloat("/idle", st == IDLE ? 1.0f: 0.0f);
+    sendFloat("/starting", ((st == TRANSITIONING)||(st == SPEAKING)||(st == NOT_SPEAKING)) ? 1.0f: 0.0f);
+    sendFloat("/finishing", st == VANISHING ? 1.0f: 0.0f);
+}
 
 
 
@@ -316,11 +388,19 @@ void ofApp::updateFbo(){
         p = ofClamp( p, 0, 255 );
 
 
+        float h = (float)i/s;
 
-        if(i > s*0.1f && i < s*0.2f)
-            ofSetColor(p,0,vadLevel*255);
-        else if(vad.vad_result && i < s*0.1f)
-            ofSetColor(p,255-p,0);
+        if(h > 0.9f)
+            // RAW VAD
+            ofSetColor(0, vad.vad_result  ? 255 : 0,0);
+        else if(h > 0.8f)
+            // speaking
+            ofSetColor(0,(speechRatio < (h-0.8f)*10.0f) ? 0 : 200,0);
+        else if(h > 0.7f)
+            // SMOOTH VAD
+            ofSetColor(0,0, (vadLevel < (h-0.7f)*10.0f) ? 0 : 255);
+        else if(h > 0.6f)
+            ofSetColor(0,0, (vadLevel == 1.0f)? 200 : 100);
         else
             ofSetColor(p);
 

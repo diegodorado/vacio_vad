@@ -6,8 +6,10 @@
 #include "ofxGui.h"
 #include "vad.h"
 
-#define HOST "localhost"
-#define PORT 6448
+//#define HOST "localhost"
+#define HOST "192.168.1.10"
+//#define PORT 6448
+#define PORT 9000
 #define FFT_SIZE 1024
 //#define SAMPLE_RATE 44100
 #define SAMPLE_RATE 48000
@@ -18,7 +20,9 @@
 
 typedef enum Status_t{
   IDLE,
-  LISTENING,
+  TRANSITIONING,
+  SPEAKING,
+  NOT_SPEAKING,
   VANISHING
 } Status_t;
 
@@ -34,6 +38,11 @@ class ofApp : public ofBaseApp{
     void drawFeatures(int _x, int _y, int _w, int _h);
     void drawSpectrum(int _x, int _y, int _w, int _h);
     void drawSpectrogram(int _x, int _y, int _w, int _h);
+
+    void sendFloat(const char* addr, float val);
+    void setStatus(Status_t st);
+    void calculateVad();
+    char* statusToString();
 
     double wave;
     ofxMaxiFFT mfft;
@@ -72,16 +81,24 @@ class ofApp : public ofBaseApp{
     ofxFloatSlider spectrogramBoost;
 
     ofxFloatSlider minSpeechTime;
+    ofxFloatSlider minSilenceTime;
     ofxFloatSlider vadAttack;
     ofxFloatSlider vadRelease;
     ofxFloatSlider speechHoldTime;
+    ofxFloatSlider silenceHoldTime;
     ofxFloatSlider maxSpeechTime;
     ofxFloatSlider silenceTime;
     ofxFloatSlider vanishingTime;
+    ofxLabel labels[5];
     float vadChangedAt = 0.0f;
     float vadLevel = 0.0f;
-    float vadHeldAt = 0.0f;
+    float listeningAt = 0.0f;
+    float timeSilenced = 0.0f;
+    float timeSpeaking = 0.0f;
+    float speechRatio = 0.0f;
     float speechAt = 0.0f;
+    float lastElapsedTimef = 0.0f;
+    float changedStateAt = 0.0f;
 
     ofxPanel gui;
 
