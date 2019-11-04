@@ -91,10 +91,11 @@ class ofApp : public ofBaseApp{
     ofxFloatSlider maxSpeechTime;
     ofxFloatSlider silenceTime;
     ofxFloatSlider vanishingTime;
+    ofxFloatSlider centroidDamp;
     ofxButton resetButton;
 
 
-    ofxLabel labels[5];
+    ofxLabel labels[6];
     float vadChangedAt = 0.0f;
     float vadLevel = 0.0f;
     float listeningAt = 0.0f;
@@ -104,6 +105,7 @@ class ofApp : public ofBaseApp{
     float speechAt = 0.0f;
     float lastElapsedTimef = 0.0f;
     float changedStateAt = 0.0f;
+    float centroid = 0.0f;
 
     ofxPanel gui;
 

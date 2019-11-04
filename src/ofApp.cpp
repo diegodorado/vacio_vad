@@ -56,10 +56,12 @@ void ofApp::setup(){
 
 	gui.add(vadAttack.setup("vadAttack", 2.0f, 0.1f, 5.0f));
 	gui.add(vadRelease.setup("vadRelease", 2.0f, 0.1f, 5.0f));
-	gui.add(minSpeechTime.setup("minSpeechTime", 1.0f, 0.1f, 5.0f));
+	gui.add(centroidDamp.setup("centroidDamp", 0.97f, 0.001f, 0.999f));
 	gui.add(minSilenceTime.setup("minSilenceTime", 1.0f, 0.1f, 5.0f));
 	gui.add(speechHoldTime.setup("speechHoldTime", 5.0f, 1.0f, 20.0f));
 	gui.add(silenceHoldTime.setup("silenceHoldTime", 5.0f, 1.0f, 20.0f));
+    
+    gui.add(minSpeechTime.setup("minSpeechTime", 1.0f, 0.1f, 4.0f));
 	gui.add(maxSpeechTime.setup("maxSpeechTime", 60.0f, 30.0f, 240.0f));
 	gui.add(silenceTime.setup("silenceTime", 20.0f, 5.0f, 60.0f));
 	gui.add(vanishingTime.setup("vanishingTime", 20.0f, 10.0f, 60.0f));
@@ -69,6 +71,7 @@ void ofApp::setup(){
     gui.add(labels[2].setup("timeSilenced",""));
     gui.add(labels[3].setup("timeSpeaking",""));
     gui.add(labels[4].setup("status",""));
+    gui.add(labels[5].setup("centroid",""));
 	gui.add(resetButton.setup("RESET"));
 
     gui.setPosition(ofGetWidth() - gui.getWidth(),0);
@@ -88,6 +91,7 @@ void ofApp::exit(){
 
 void ofApp::resetButtonPressed(){
     setStatus(IDLE);
+    vadChangedAt = 0.0f;
 }
 
 
@@ -98,6 +102,8 @@ void ofApp::update(){
         updateFbo();
         should_update_fbos = 0; 
     }
+    
+
 }
 
 
@@ -144,9 +150,16 @@ void ofApp::drawFeatures(int _x, int _y, int _w, int _h){
     height = mfft.spectralCentroid() * _h/20000;
     ofDrawRectangle(_x + xinc ,_y+_h - height,xinc, height);
 
+
+    //	spectralFlatness
+    height = centroid * _h/20000;
+    ofDrawRectangle(_x + xinc*2,_y+_h - height,xinc, height);
+
+
+
     //	spectralFlatness
     height = mfft.spectralFlatness() * _h;
-    ofDrawRectangle(_x + xinc*2,_y+_h - height,xinc, height);
+    ofDrawRectangle(_x + xinc*3,_y+_h - height,xinc, height);
 
 
 
@@ -162,6 +175,8 @@ void ofApp::drawFeatures(int _x, int _y, int _w, int _h){
 
 //--------------------------------------------------------------
 void ofApp::draw(){
+
+    centroid += (1.0f-centroidDamp) * (mfft.spectralCentroid() - centroid);
 
     ofSetColor(255, 255, 255,255);
     drawSpectrogram(0,ofGetHeight()/2,ofGetWidth()/2, ofGetHeight()/2);
@@ -188,6 +203,7 @@ void ofApp::draw(){
         labels[2] = ofToString(timeSilenced,1);
         labels[3] = ofToString(timeSpeaking,1);
         labels[4] = ofToString(statusToString());
+        labels[5] = ofToString(centroid,0);
 	}
 
     //Send OSC:
@@ -197,8 +213,6 @@ void ofApp::draw(){
 
     sendFloat("/vad",(float)(vad.vad_result));
     sendFloat("/verbo", speechRatio);
-
-    sendFloat("/centroid", mfft.spectralCentroid() / 20000);
     sendFloat("/flatness", mfft.spectralFlatness());
 
 
@@ -368,8 +382,18 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
     
 
 void ofApp::setStatus(Status_t st){
+
+    if((status == IDLE)){
+        sendFloat("/centroid", centroid / 4000);
+        ofLogWarning() <<   (centroid / 4000);
+    }
+    if((st == IDLE)||(st == VANISHING)){
+        sendFloat("/centroid", 0.0f);
+    }
+
     status = st;
     changedStateAt = ofGetElapsedTimef();
+
 
     sendFloat("/idle", st == IDLE ? 1.0f: 0.0f);
     sendFloat("/starting", ((st == TRANSITIONING)||(st == SPEAKING)||(st == NOT_SPEAKING)) ? 1.0f: 0.0f);
