@@ -38,8 +38,8 @@ void ofApp::setup(){
     prev_mfccs = (double*) malloc(sizeof(double) * N_COEFF * N_AVG_SAMPLES);
 
     //512 bins, 42 filters, 13 coeffs, min/max freq 20/20000
-    //mfcc.setup(BUFFER_SIZE, 42, N_COEFF, 100, 4000, SAMPLE_RATE);
-    mfcc.setup(BUFFER_SIZE/2, 42, N_COEFF, 20, 20000, SAMPLE_RATE);
+    mfcc.setup(BUFFER_SIZE/2, 42, N_COEFF, 100, 4000, SAMPLE_RATE);
+    //mfcc.setup(BUFFER_SIZE/2, 42, N_COEFF, 20, 20000, SAMPLE_RATE);
     ofxMaxiSettings::setup(SAMPLE_RATE, 2, BUFFER_SIZE);
 
     fbo_spectrum.allocate(BUFFER_SIZE/2, BUFFER_SIZE/2);
@@ -51,6 +51,7 @@ void ofApp::setup(){
 
     vad.setup(SAMPLE_RATE);
 
+	resetButton.addListener(this, &ofApp::resetButtonPressed);
 
     gui.setup(); // most of the time you don't need a name
 	gui.add(inputVolume.setup("inputVolume", 1.0f, 0.0f, 1.0f));
@@ -73,14 +74,27 @@ void ofApp::setup(){
     gui.add(labels[2].setup("timeSilenced",""));
     gui.add(labels[3].setup("timeSpeaking",""));
     gui.add(labels[4].setup("status",""));
+	gui.add(resetButton.setup("RESET"));
 
     gui.setPosition(ofGetWidth() - gui.getWidth(),0);
 
 	bHide = false;
 
 
+    setStatus(IDLE);
 
 }
+
+//--------------------------------------------------------------
+void ofApp::exit(){
+	resetButton.removeListener(this, &ofApp::resetButtonPressed);
+}
+
+
+void ofApp::resetButtonPressed(){
+    setStatus(IDLE);
+}
+
 
 //--------------------------------------------------------------
 void ofApp::update(){
@@ -185,8 +199,12 @@ void ofApp::draw(){
         sendFloat((ofToString("/mfcc")+ofToString(i)).c_str(),ofClamp((float)(mfccs[i]+1.0)*0.5f, 0.0f, 1.0f));
     }
 
-    sendFloat("/vad",vadLevel);
+    sendFloat("/vad",(float)(vad.vad_result));
     sendFloat("/verbo", speechRatio);
+
+    sendFloat("/centroid", mfft.spectralCentroid() / 20000);
+    sendFloat("/flatness", mfft.spectralFlatness());
+
 
 
 
@@ -386,7 +404,6 @@ void ofApp::updateFbo(){
     for( int i = 0; i < s; i++ ){
         float p = ofMap(mfft.magnitudes[i]*spectrogramBoost, 0.0, 10.0, 0, 255);
         p = ofClamp( p, 0, 255 );
-
 
         float h = (float)i/s;
 

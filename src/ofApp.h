@@ -43,6 +43,8 @@ class ofApp : public ofBaseApp{
     void setStatus(Status_t st);
     void calculateVad();
     char* statusToString();
+    void resetButtonPressed();
+    void exit();
 
     double wave;
     ofxMaxiFFT mfft;
@@ -89,6 +91,9 @@ class ofApp : public ofBaseApp{
     ofxFloatSlider maxSpeechTime;
     ofxFloatSlider silenceTime;
     ofxFloatSlider vanishingTime;
+    ofxButton resetButton;
+
+
     ofxLabel labels[5];
     float vadChangedAt = 0.0f;
     float vadLevel = 0.0f;
