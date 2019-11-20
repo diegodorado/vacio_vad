@@ -23,6 +23,7 @@ typedef enum Status_t{
   TRANSITIONING,
   SPEAKING,
   NOT_SPEAKING,
+  SHOWING,
   VANISHING
 } Status_t;
 
@@ -45,6 +46,8 @@ class ofApp : public ofBaseApp{
     char* statusToString();
     void resetButtonPressed();
     void exit();
+    vector<string> arguments;
+
 
     double wave;
     ofxMaxiFFT mfft;
@@ -63,7 +66,7 @@ class ofApp : public ofBaseApp{
     Vad vad;
 
 		ofSoundStream soundStream;
-    
+
     int spectrogram_pos = 0;
     ofFbo fbo_spectrum;
     ofFbo fbo_spectrogram;
@@ -90,6 +93,7 @@ class ofApp : public ofBaseApp{
     ofxFloatSlider silenceHoldTime;
     ofxFloatSlider maxSpeechTime;
     ofxFloatSlider silenceTime;
+    ofxFloatSlider showingTime;
     ofxFloatSlider vanishingTime;
     ofxFloatSlider centroidDamp;
     ofxButton resetButton;

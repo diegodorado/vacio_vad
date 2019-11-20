@@ -13,17 +13,43 @@ void ofApp::setup(){
 
   	ofSoundStreamSettings settings;
 
-    //auto devices = soundStream.getDeviceList(ofSoundDevice::Api::JACK);
-  	//auto devices = soundStream.getMatchingDevices("default");
-    auto devices = soundStream.getMatchingDevices("",2);
-    settings.setInDevice(devices[0]);
+    for (int i = 0; i <  arguments.size(); i++){
+      ofLogWarning() << i << " - " << arguments[i] << "\n";
+    }
+
+    soundStream.printDeviceList();
+
+    auto devices = soundStream.getDeviceList();
+    ofLogWarning() << "Listing devices index ";
+    for (int i = 0; i < devices.size(); i++){
+      ofLogWarning() << "Device " << i << " - " << devices[i].name << " inputs: " << devices[i].inputChannels;
+    }
+
+    // check if we are selecting the device index
+    if ( arguments.size()==2){
+      int audioIndex = std::stoi(arguments[1]);
+      ofLogWarning() << "Selected index: " << audioIndex  << " device: " << devices[audioIndex].name << "\n";
+      settings.setInDevice(devices[audioIndex]);
+    } else {
+      // no device preferences... assing auto
+      auto devices = soundStream.getMatchingDevices("",2);
+      if(devices.empty()){
+        ofLogWarning() << "No devices matching 2 inputs!";
+        ofExit();
+      }else{
+        settings.setInDevice(devices[0]);
+        ofLogWarning() << "Selected device: " << devices[0].name << "\n";
+      }
+    }
+
+
   	settings.setInListener(this);
   	settings.sampleRate = SAMPLE_RATE;
   	settings.numOutputChannels = 0;
   	settings.numInputChannels = 2;
   	settings.bufferSize = BUFFER_SIZE;
   	soundStream.setup(settings);
- 
+
 
     mfft.setup(FFT_SIZE, BUFFER_SIZE, BUFFER_SIZE);
     oct.setup(SAMPLE_RATE, FFT_SIZE/2, N_AVERAGES);
@@ -42,29 +68,30 @@ void ofApp::setup(){
 
 
     vad_history = (uint8_t*) malloc(sizeof(uint8_t) * BUFFER_SIZE/2 );
-    
+
 
     vad.setup(SAMPLE_RATE);
 
-	resetButton.addListener(this, &ofApp::resetButtonPressed);
+    resetButton.addListener(this, &ofApp::resetButtonPressed);
 
     gui.setup(); // most of the time you don't need a name
-	gui.add(inputVolume.setup("inputVolume", 1.0f, 0.0f, 1.0f));
-	gui.add(spectrogramBoost.setup("spectrogramBoost", 5.0f, 1.0f, 10.0f));
-	gui.add(vadMode.setup("vadMode", 0, 0, 3));
+    gui.add(inputVolume.setup("inputVolume", 1.0f, 0.0f, 1.0f));
+    gui.add(spectrogramBoost.setup("spectrogramBoost", 5.0f, 1.0f, 10.0f));
+    gui.add(vadMode.setup("vadMode", 0, 0, 3));
 
 
-	gui.add(vadAttack.setup("vadAttack", 2.0f, 0.1f, 5.0f));
-	gui.add(vadRelease.setup("vadRelease", 2.0f, 0.1f, 5.0f));
-	gui.add(centroidDamp.setup("centroidDamp", 0.97f, 0.001f, 0.999f));
-	gui.add(minSilenceTime.setup("minSilenceTime", 1.0f, 0.1f, 5.0f));
-	gui.add(speechHoldTime.setup("speechHoldTime", 5.0f, 1.0f, 20.0f));
-	gui.add(silenceHoldTime.setup("silenceHoldTime", 5.0f, 1.0f, 20.0f));
-    
+    gui.add(vadAttack.setup("vadAttack", 2.0f, 0.1f, 5.0f));
+    gui.add(vadRelease.setup("vadRelease", 2.0f, 0.1f, 5.0f));
+    gui.add(centroidDamp.setup("centroidDamp", 0.97f, 0.001f, 0.999f));
+    gui.add(minSilenceTime.setup("minSilenceTime", 1.0f, 0.1f, 5.0f));
+    gui.add(speechHoldTime.setup("speechHoldTime", 5.0f, 1.0f, 10.0f));
+    gui.add(silenceHoldTime.setup("silenceHoldTime", 1.0f, 0.1f, 10.0f));
+
     gui.add(minSpeechTime.setup("minSpeechTime", 1.0f, 0.1f, 4.0f));
-	gui.add(maxSpeechTime.setup("maxSpeechTime", 60.0f, 30.0f, 240.0f));
-	gui.add(silenceTime.setup("silenceTime", 20.0f, 5.0f, 60.0f));
-	gui.add(vanishingTime.setup("vanishingTime", 20.0f, 10.0f, 60.0f));
+    gui.add(maxSpeechTime.setup("maxSpeechTime", 60.0f, 20.0f, 240.0f));
+    gui.add(silenceTime.setup("silenceTime", 5.0f, 1.0f, 20.0f));
+    gui.add(showingTime.setup("showingTime", 10.0f, 1.0f, 30.0f));
+    gui.add(vanishingTime.setup("vanishingTime", 5.0f, 1.0f, 20.0f));
 
     gui.add(labels[0].setup("speechRatio",""));
     gui.add(labels[1].setup("listeningAt",""));
@@ -72,7 +99,7 @@ void ofApp::setup(){
     gui.add(labels[3].setup("timeSpeaking",""));
     gui.add(labels[4].setup("status",""));
     gui.add(labels[5].setup("centroid",""));
-	gui.add(resetButton.setup("RESET"));
+    gui.add(resetButton.setup("RESET"));
 
     gui.setPosition(ofGetWidth() - gui.getWidth(),0);
 
@@ -90,8 +117,8 @@ void ofApp::exit(){
 
 
 void ofApp::resetButtonPressed(){
-    setStatus(IDLE);
     vadChangedAt = 0.0f;
+    setStatus(IDLE);
 }
 
 
@@ -100,9 +127,9 @@ void ofApp::update(){
 
     if( should_update_fbos ){
         updateFbo();
-        should_update_fbos = 0; 
+        should_update_fbos = 0;
     }
-    
+
 
 }
 
@@ -252,19 +279,16 @@ char* ofApp::statusToString(){
     {
         case IDLE:
             return "IDLE";
-
         case TRANSITIONING:
             return "TRANSITIONING";
-
         case SPEAKING:
             return "SPEAKING";
-
         case NOT_SPEAKING:
             return "NOT_SPEAKING";
-
+        case SHOWING:
+          return "SHOWING";
         case VANISHING:
-            return "VANISHING";
-        
+          return "VANISHING";
         default:
             return "IMPOSIBLE";
     }
@@ -294,7 +318,7 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
             float et = ofGetElapsedTimef();
             float dt = et-lastElapsedTimef;
             lastElapsedTimef = et;
-            
+
 
             if(vad.changed)
                 vadChangedAt = et;
@@ -309,6 +333,7 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
                     listeningAt = et;
                     timeSilenced = 0.0f;
                     timeSpeaking = 0.0f;
+                    vadLevel = 0.0f;
                     if((vad.vad_result==1) && (et-vadChangedAt) > minSpeechTime ){
                         setStatus(TRANSITIONING);
                     }
@@ -316,7 +341,7 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
                     break;
 
                 case TRANSITIONING:
-                    vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+                    vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f);
 
                     if(vadLevel == 1.0f ){
                         setStatus(SPEAKING);
@@ -334,30 +359,36 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
 
                     // update if not holding
                     if((et-changedStateAt) > speechHoldTime )
-                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f);
 
                     if((et-listeningAt) > maxSpeechTime)
-                        setStatus(VANISHING);
-                    
+                        setStatus(SHOWING);
+
                     if(vadLevel < 1.0f)
                         setStatus(TRANSITIONING);
-                    
+
                     break;
 
                 case NOT_SPEAKING:
                     timeSilenced += dt;
 
                     if((et-changedStateAt) > silenceHoldTime )
-                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f); 
+                        vadLevel = ofClamp(vadLevel + dt * (vad.vad_result ? vadAttack : -vadRelease), 0.0f, 1.0f);
 
                     if((et-changedStateAt) > silenceTime)
-                        setStatus(VANISHING);
-                   
+                        setStatus(SHOWING);
+
 
                     if( vadLevel > 0.0f )
                         setStatus(TRANSITIONING);
-                    
 
+
+                    break;
+
+                case SHOWING:
+                    if( (et-changedStateAt) > showingTime ){
+                        setStatus(VANISHING);
+                    }
                     break;
 
                 case VANISHING:
@@ -365,12 +396,12 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
                         setStatus(IDLE);
                     }
                     break;
-                
+
                 default:
                     break;
             }
 
-            
+
         }
 
 
@@ -379,14 +410,16 @@ void ofApp::audioIn(ofSoundBuffer & buffer){
 	}
 }
 
-    
+
 
 void ofApp::setStatus(Status_t st){
 
+    // if status was idle, send centroid
     if((status == IDLE)){
         sendFloat("/centroid", centroid / 4000);
-        ofLogWarning() <<   (centroid / 4000);
+        //ofLogWarning() <<   (centroid / 4000);
     }
+
     if((st == IDLE)||(st == VANISHING)){
         sendFloat("/centroid", 0.0f);
     }
@@ -397,6 +430,7 @@ void ofApp::setStatus(Status_t st){
 
     sendFloat("/idle", st == IDLE ? 1.0f: 0.0f);
     sendFloat("/starting", ((st == TRANSITIONING)||(st == SPEAKING)||(st == NOT_SPEAKING)) ? 1.0f: 0.0f);
+    sendFloat("/showing", st == SHOWING ? 1.0f: 0.0f);
     sendFloat("/finishing", st == VANISHING ? 1.0f: 0.0f);
 }
 
@@ -411,7 +445,7 @@ void ofApp::updateFbo(){
         ofNoFill();
         ofSetColor(255, 255, 255,255);
         ofBeginShape();
-        
+
         for( int i = 0; i < s; i++ ){
             float y = (1-mfft.magnitudes[i]*0.5)*s;
             ofVertex(i, y);
